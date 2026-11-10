@@ -1,0 +1,27 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isMember() {
+      return request.auth != null
+        && exists(/databases/$(database)/documents/members/$(request.auth.uid));
+    }
+    match /private/join {
+      allow read, update: if isMember();
+      allow create: if request.auth != null
+        && !exists(/databases/$(database)/documents/private/join);
+    }
+    match /members/{uid} {
+      allow read: if isMember();
+      allow create: if request.auth != null && request.auth.uid == uid
+        && request.resource.data.code
+           == getAfter(/databases/$(database)/documents/private/join).data.code;
+      allow delete: if isMember();
+    }
+    match /config/{doc} {
+      allow read, write: if isMember();
+    }
+    match /entries/{doc} {
+      allow read, write: if isMember();
+    }
+  }
+}

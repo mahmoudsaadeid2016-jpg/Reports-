@@ -1,0 +1,822 @@
+<!doctype html>
+<html lang="ar" dir="rtl"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0e6a53">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="mobile-web-app-capable" content="yes">
+<title>بلاغات فحص المدارس</title>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=Noto+Kufi+Arabic:wght@600;700&display=swap">
+<style id="mainCss">
+/* Layout: one working column; sticky header holds tabs and, on the entry view, the grade / sex / age switches; reports render as A4 landscape paper sheets */
+:root{
+  --bg:#f2f5f3; --surface:#ffffff; --sunk:#e7ede9; --fg:#15211c; --muted:#5a6a63; --line:#d3ddd8;
+  --accent:#0e6a53; --accent-soft:#dcefe8; --accent-ink:#ffffff;
+  --male:#1f5fa8; --male-soft:#e1ebf7; --female:#a03a6c; --female-soft:#f6e3ec;
+  --warn:#9a5208; --warn-soft:#fbecd9; --danger:#a3271f;
+  --f-display:"Noto Kufi Arabic","IBM Plex Sans Arabic",Tahoma,sans-serif;
+  --f-body:"IBM Plex Sans Arabic",Tahoma,"Segoe UI",sans-serif;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0e1412; --surface:#161f1b; --sunk:#1e2924; --fg:#e2eae6; --muted:#94a49d; --line:#2b3832;
+  --accent:#4dbf9f; --accent-soft:#173a30; --accent-ink:#04201a;
+  --male:#7fb0ea; --male-soft:#18283a; --female:#e58fb9; --female-soft:#3a1d2b;
+  --warn:#e7a35a; --warn-soft:#3a2a15; --danger:#ef7d72; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0e1412; --surface:#161f1b; --sunk:#1e2924; --fg:#e2eae6; --muted:#94a49d; --line:#2b3832;
+  --accent:#4dbf9f; --accent-soft:#173a30; --accent-ink:#04201a;
+  --male:#7fb0ea; --male-soft:#18283a; --female:#e58fb9; --female-soft:#3a1d2b;
+  --warn:#e7a35a; --warn-soft:#3a2a15; --danger:#ef7d72; color-scheme:dark}
+*{box-sizing:border-box}
+html,body{margin:0}
+:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+[hidden]{display:none!important}
+body{background:var(--bg);color:var(--fg);font-family:var(--f-body);font-size:15px;line-height:1.55;direction:rtl}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--surface)}
+.wrap{max-width:980px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:0 130px}
+header.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--surface);border-bottom:1px solid var(--line)}
+header.top .in{max-width:980px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:8px 0}
+.brand{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.brand h1{font-family:var(--f-display);font-size:17px;margin:0}
+.brand small{color:var(--muted);font-size:12.5px}
+nav.tabs{display:flex;gap:2px;overflow-x:auto;margin-top:4px}
+nav.tabs button{font:inherit;font-weight:600;font-size:14px;background:none;border:0;color:var(--muted);padding:8px 12px;border-bottom:3px solid transparent;cursor:pointer;white-space:nowrap}
+nav.tabs button[aria-selected="true"]{color:var(--accent);border-bottom-color:var(--accent)}
+.ctx{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;padding-block:8px 10px;border-top:1px solid var(--line)}
+.ctx .lbl{font-size:12px;color:var(--muted);font-weight:600}
+.ctx .grp{display:flex;gap:6px;align-items:center}
+button:focus-visible,input:focus-visible,select:focus-visible,a:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.banner{margin-top:14px;padding:10px 14px;border-radius:8px;background:var(--warn-soft);color:var(--warn);font-size:13.5px}
+section.view{display:flex;flex-direction:column;gap:14px;padding-top:14px}
+.bar{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px}
+label.f{display:flex;flex-direction:column;gap:4px;font-size:12.5px;color:var(--muted);font-weight:500;min-width:0}
+input,select{font:inherit;font-size:15px;color:var(--fg);background:var(--surface);border:1px solid var(--line);border-radius:7px;padding:8px 10px;width:100%;min-width:0}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:9px;overflow:hidden;background:var(--surface)}
+.seg button{font:inherit;font-size:14px;font-weight:600;padding:7px 12px;border:0;background:transparent;color:var(--fg);cursor:pointer;display:inline-flex;gap:6px;align-items:center;white-space:nowrap}
+.seg button + button{border-inline-start:1px solid var(--line)}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink)}
+.seg.sex button[data-s="m"][aria-pressed="true"]{background:var(--male);color:#fff}
+.seg.sex button[data-s="f"][aria-pressed="true"]{background:var(--female);color:#fff}
+:root:not([data-theme="light"]) .seg.sex button[aria-pressed="true"]{color:var(--accent-ink)}
+@media (prefers-color-scheme: light){:root:not([data-theme="dark"]) .seg.sex button[aria-pressed="true"]{color:#fff}}
+:root[data-theme="light"] .seg.sex button[aria-pressed="true"]{color:#fff}
+.chips-g{display:flex;gap:6px;overflow-x:auto;padding-bottom:2px}
+.chips-g button{font:inherit;font-size:13.5px;font-weight:600;padding:6px 11px;border-radius:99px;border:1px solid var(--line);background:var(--surface);color:var(--fg);cursor:pointer;white-space:nowrap;display:inline-flex;gap:6px;align-items:center}
+.chips-g button[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.dot{width:7px;height:7px;border-radius:50%;background:currentColor;opacity:.85}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px;min-width:0}
+.card h2{font-family:var(--f-display);font-size:15px;margin:0 0 4px}
+.card .cap{font-size:12.5px;color:var(--muted);margin:0 0 10px}
+.ctrs{display:flex;flex-direction:column}
+.ctr{display:flex;align-items:center;gap:10px;padding-block:8px;border-top:1px solid var(--line)}
+.ctr:first-child{border-top:0}
+.ctr .lb{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.ctr .lb b{font-weight:600;font-size:14.5px}
+.ctr .oth{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+.tag{display:inline-block;font-size:11.5px;font-weight:600;padding:1px 8px;border-radius:99px;margin-inline-start:6px;vertical-align:1px}
+.tag.m{background:var(--male-soft);color:var(--male)} .tag.f{background:var(--female-soft);color:var(--female)} .tag.n{background:var(--sunk);color:var(--muted)}
+.stp{display:flex;align-items:center;gap:4px;flex:none}
+.stp button{font:inherit;font-size:20px;line-height:1;width:42px;height:42px;border-radius:9px;border:1px solid var(--line);background:var(--sunk);color:var(--fg);cursor:pointer}
+.stp button.plus{background:var(--accent-soft);color:var(--accent);border-color:transparent}
+.stp input{width:62px;text-align:center;font-size:17px;font-weight:600;padding:8px 2px;font-variant-numeric:tabular-nums}
+.stp input.bad{border-color:var(--warn);background:var(--warn-soft)}
+.warn{font-size:12.5px;color:var(--warn);margin-top:6px}
+.warn:empty{display:none}
+.hint{font-size:12.5px;color:var(--muted)}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{font-size:12.5px;padding:3px 10px;border-radius:99px;background:var(--sunk);color:var(--muted)}
+.chip.on{background:var(--accent-soft);color:var(--accent);font-weight:600}
+.savebar{position:fixed;inset:auto 0 0 0;z-index:6;background:var(--surface);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom,0px)}
+.savebar .in{max-width:980px;margin:0 auto;display:flex;gap:10px;align-items:center;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:10px}
+.savebar .st{flex:1;font-size:13px;color:var(--muted);min-width:0}
+.btn{font:inherit;font-weight:600;font-size:14.5px;padding:10px 16px;border-radius:8px;border:1px solid var(--accent);background:var(--accent);color:var(--accent-ink);cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:8px}
+.btn.ghost{background:transparent;color:var(--accent)}
+.btn.wa{background:#1c8a4a;border-color:#1c8a4a;color:#fff}
+.btn.dz{background:transparent;color:var(--danger);border-color:var(--line)}
+.btn:disabled{opacity:.5;cursor:default}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.empty{text-align:center;padding:28px 16px}
+.empty h3{font-family:var(--f-display);margin:0 0 6px;font-size:16px}
+.slist{display:flex;flex-direction:column;gap:6px}
+.sitem{display:flex;gap:6px;align-items:center}
+.sitem .num{width:26px;text-align:center;color:var(--muted);font-variant-numeric:tabular-nums;font-size:13px}
+.sitem input{flex:1}
+.ib{font:inherit;width:38px;height:38px;border-radius:7px;border:1px solid var(--line);background:var(--surface);color:var(--fg);cursor:pointer;flex:none}
+.ib.x{color:var(--danger)}
+.share{display:flex;flex-direction:column;gap:10px}
+.wabox{display:flex;flex-direction:column;gap:8px}
+.wastep{display:flex;gap:10px;align-items:flex-start;background:var(--sunk);border-radius:8px;padding:10px 12px}
+.wastep .n{flex:none;width:24px;height:24px;border-radius:50%;background:#1c8a4a;color:#fff;display:grid;place-items:center;font-weight:700;font-size:13px}
+.steps{margin:0;padding-inline-start:20px;font-size:13.5px;display:flex;flex-direction:column;gap:6px}
+.status{font-size:13px;padding:8px 12px;border-radius:8px;background:var(--accent-soft);color:var(--accent)}
+.status.err{background:var(--warn-soft);color:var(--warn)}
+.paperwrap{overflow-x:auto;border:1px solid var(--line);border-radius:10px;background:var(--sunk);padding:12px}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(84px + env(safe-area-inset-bottom,0px));background:var(--fg);color:var(--bg);padding:9px 16px;border-radius:8px;font-size:14px;z-index:20;max-width:calc(100% - 32px);text-align:center}
+#stage{position:fixed;top:0;left:-20000px;width:1123px;pointer-events:none}
+@media (max-width:520px){.brand small{display:none}.ctx .lbl{display:none}.ctx{gap:8px}.ctx .seg button{padding:7px 10px;font-size:13.5px}.chips-g{width:100%}.stp button{width:40px;height:40px}.stp input{width:54px}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+<style id="repCss">
+/* Paper sheet: A4 landscape at 96dpi, black on white in both themes (it is a printed form) */
+.sheet{background:#fff;color:#000;width:1123px;min-height:794px;padding:22px 26px 18px;margin:0 auto;direction:rtl;font-family:Arial,Tahoma,"DejaVu Sans",sans-serif;display:flex;flex-direction:column}
+.paperwrap .sheet + .sheet{margin-top:14px}
+.sheet .hd{display:flex;justify-content:space-between;align-items:flex-start;font-size:12px;line-height:1.45;font-weight:700}
+.sheet .hd .en{direction:ltr;text-align:left}
+.sheet .meta{display:flex;justify-content:space-between;margin:12px 30px 2px;font-size:12.5px;font-weight:700}
+.sheet .meta span b{font-weight:400;border-bottom:1px dotted #000;padding:0 8px;display:inline-block;min-width:150px;text-align:center}
+.sheet .ttl{text-align:center;font-size:13px;font-weight:700;line-height:1.6}
+.sheet .ttl u{text-underline-offset:3px}
+.sheet .who{text-align:center;font-size:12.5px;margin-top:2px}
+.sheet table{border-collapse:collapse;width:100%;table-layout:fixed;margin-top:10px;font-variant-numeric:tabular-nums}
+.sheet th,.sheet td{border:1px solid #000;padding:1px;text-align:center;vertical-align:middle;overflow:hidden}
+.sheet th{font-size:9.5px;font-weight:700;line-height:1.2;background:#fff}
+.sheet th.tt{background:#e6e6e6;font-size:12.5px;padding:3px}
+.sheet th.gp{font-size:11px}
+.sheet th.v{height:58px}
+.sheet th.v span{writing-mode:vertical-rl;transform:rotate(180deg);display:inline-block;white-space:nowrap;font-size:8.5px;line-height:1.1}
+.sheet th.sx{font-size:8.5px;font-weight:700}
+.sheet td{font-size:11px;height:30px}
+.sheet td.z{color:#777}
+.sheet table.fin th.v{height:86px}
+.sheet table.fin th.v span{font-size:10px}
+.sheet table.fin td{height:26px;font-size:11.5px}
+.sheet table.fin td.nm{text-align:right;padding:0 5px;white-space:nowrap;font-size:11px}
+.sheet table.fin tr.sum td{font-weight:700}
+.sheet .grow{flex:1}
+.sheet .sig{display:flex;justify-content:space-between;margin:14px 80px 0;font-size:13px;font-weight:700;text-align:center}
+.sheet .sig div{display:flex;flex-direction:column;gap:8px}
+.sheet .sig i{font-style:normal;font-weight:400}
+.sheet .foot{display:flex;justify-content:space-between;font-size:9.5px;color:#444;margin-top:8px;border-top:1px solid #bbb;padding-top:3px}
+.gate{position:fixed;inset:0;z-index:30;background:var(--bg);display:grid;place-items:center;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:24px;overflow:auto}
+.gcard{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:22px 18px;max-width:440px;width:100%;display:flex;flex-direction:column;gap:12px}
+.gcard h2{font-family:var(--f-display);margin:0;font-size:19px}
+.gcard p{margin:0;color:var(--muted);font-size:14px}
+.gcard textarea{font:inherit;font-size:13px;direction:ltr;min-height:150px;border:1px solid var(--line);border-radius:8px;padding:10px;background:var(--surface);color:var(--fg);width:100%}
+.gerr{color:var(--danger);font-size:13.5px}
+details summary{cursor:pointer;font-weight:600;font-size:14px;color:var(--accent);padding-block:4px}
+</style>
+</head><body>
+
+<div class="gate" id="gate" hidden><div class="gcard">
+  <img src="icon-192.png" alt="" width="64" height="64" style="border-radius:14px">
+  <h2>بلاغات فحص تلاميذ المدارس</h2>
+  <div id="gWait"><p>بيفتح…</p></div>
+  <div id="gJoin" hidden style="display:flex;flex-direction:column;gap:12px">
+    <p>أول مرة على الجهاز ده؟ اكتب اسمك وكود الوحدة اللي أخدته من مسؤول الوحدة. ده بيحصل مرة واحدة بس، وبعدها بيفتح على طول.</p>
+    <label class="f">اسمك<input id="jName" autocomplete="name" placeholder="مثلاً: أحمد - فني المعمل"></label>
+    <label class="f">كود الوحدة<input id="jCode" autocomplete="off" inputmode="numeric" style="direction:ltr;text-align:center;letter-spacing:3px;font-size:18px"></label>
+    <button class="btn" id="jGo" style="justify-content:center">دخول</button>
+    <div class="gerr" id="jErr"></div>
+    <details><summary>أول تشغيل للوحدة؟ اعمل كود جديد</summary>
+      <p style="margin-top:6px">ده للمسؤول بس، ومرة واحدة. اختار كود من 8 أرقام على الأقل واحفظه، وبعدين ابعت رابط الفريق لزمايلك.</p>
+      <div class="row" style="margin-top:8px"><input id="jNew" inputmode="numeric" placeholder="كود جديد (8 أرقام)" style="direction:ltr;text-align:center;flex:1"><button class="btn ghost" id="jCreate">إنشاء</button></div>
+    </details>
+  </div>
+</div></div>
+
+<header class="top"><div class="in">
+  <div class="brand"><h1>بلاغات فحص تلاميذ المدارس</h1><small id="unitLine">البلهارسيا والطفيليات المعوية</small></div>
+  <nav class="tabs" role="tablist">
+    <button id="t-entry" role="tab" aria-selected="true" data-v="entry">الإدخال اليومي</button>
+    <button id="t-rep" role="tab" aria-selected="false" data-v="rep">البلاغات و PDF</button>
+    <button id="t-sch" role="tab" aria-selected="false" data-v="sch">المدارس</button>
+    <button id="t-set" role="tab" aria-selected="false" data-v="set">بيانات الوحدة</button>
+  </nav>
+  <div class="ctx" id="ctx">
+    <div class="chips-g" id="eGrades" role="group" aria-label="الصف"></div>
+    <div class="grp"><span class="lbl">النوع</span><div class="seg sex" id="eSex" role="group" aria-label="النوع"><button data-s="m" aria-pressed="true">ذكر</button><button data-s="f" aria-pressed="false">أنثى</button></div></div>
+    <div class="grp"><span class="lbl">السن</span><div class="seg" id="eAge" role="group" aria-label="السن"><button data-a="a" aria-pressed="true">أقل من أو = 12</button><button data-a="b" aria-pressed="false">أكبر من 12</button></div></div>
+  </div>
+</div></header>
+
+<main class="wrap">
+  <div id="banner" class="banner" hidden></div>
+
+  <!-- ENTRY -->
+  <section class="view" id="v-entry">
+    <div class="bar">
+      <label class="f">اليوم<input type="date" id="eDate"></label>
+      <label class="f">المدرسة<select id="eSchool"></select></label>
+    </div>
+    <div id="eNoSchools" class="card empty" hidden>
+      <h3>أضف مدارس الوحدة أولاً</h3>
+      <p class="hint">من تبويب «المدارس» اكتب أسماء المدارس اللي بتفحصها الوحدة، وبعدها سجّل نتايج كل يوم.</p>
+      <button class="btn" id="goSch">إضافة المدارس</button>
+    </div>
+    <div id="eForms" style="display:flex;flex-direction:column;gap:14px"></div>
+    <div class="card" id="dayCard">
+      <h2>مدارس اليوم <span class="hint" id="dayLbl"></span></h2>
+      <div class="chips" id="dayChips" style="margin-top:8px"></div>
+    </div>
+  </section>
+
+  <!-- REPORTS -->
+  <section class="view" id="v-rep" hidden>
+    <div class="chips-g" id="rType" role="group" aria-label="نوع البلاغ">
+      <button aria-pressed="true" data-t="day">البلاغ اليومي</button>
+      <button aria-pressed="false" data-t="week">البلاغ الأسبوعي</button>
+      <button aria-pressed="false" data-t="final">البلاغ النهائي</button>
+    </div>
+    <div class="bar">
+      <label class="f" id="lFrom"><span id="lFromT">اليوم</span><input type="date" id="rFrom"></label>
+      <label class="f" id="lTo">إلى تاريخ<input type="date" id="rTo"></label>
+      <label class="f" id="lNum">رقم البلاغ الأسبوعي<input type="number" id="rNum" min="1" inputmode="numeric"></label>
+      <label class="f" id="lSch">المدرسة<select id="rSchool"></select></label>
+    </div>
+    <div class="card share">
+      <h2>تنزيل البلاغ</h2>
+      <div class="row"><button class="btn" id="pdfBtn">تنزيل PDF</button><span class="hint">ملف A4 بالعرض، صفحة لكل مدرسة.</span></div>
+      <div id="pdfStatus" class="status" hidden></div>
+      <h2 style="margin-top:6px">إرسال على واتساب</h2>
+      <div class="row"><button class="btn wa" id="shareBtn">إرسال الـ PDF على واتساب</button></div>
+      <p class="hint" style="margin:0">بتفتح قائمة المشاركة والملف جواها: اختار واتساب، وبعدها الشخص أو الجروب.</p>
+      <label class="row hint" style="gap:6px"><input type="checkbox" id="waSum" style="width:auto"> ابعت ملخّص مكتوب بالأرقام مع الملف</label>
+      <details>
+        <summary>فتح محادثة رقم معيّن (رسالة مكتوبة)</summary>
+        <div class="bar" style="margin-top:8px">
+          <label class="f">رقم الموبايل<input id="waNumIn" inputmode="tel" placeholder="01xxxxxxxxx" style="direction:ltr;text-align:right"></label>
+          <label class="f">أو اختار من الجهات المحفوظة<select id="waTo"></select></label>
+        </div>
+        <div class="row" style="margin-top:8px">
+          <a class="btn wa" id="waLink" href="https://wa.me/" target="_blank" rel="noopener">افتح المحادثة</a>
+          <button class="btn ghost" id="waSave">احفظ الرقم</button>
+        </div>
+      </details>
+    </div>
+    <div class="paperwrap"><div id="preview"></div></div>
+  </section>
+
+  <!-- SCHOOLS -->
+  <section class="view" id="v-sch" hidden>
+    <div class="card">
+      <h2>مدارس الوحدة <span class="hint" id="schCount"></span></h2>
+      <div class="slist" id="sList" style="margin-top:8px"></div>
+      <div class="row" style="margin-top:12px">
+        <input id="sNew" placeholder="اسم المدرسة الجديدة" style="flex:1;min-width:180px">
+        <button class="btn" id="sAdd">إضافة</button>
+      </div>
+      <p class="hint" style="margin-bottom:0">تقدر تلصق أكتر من اسم مرة واحدة، كل اسم في سطر. الترتيب هنا هو ترتيب المدارس في البلاغ النهائي.</p>
+    </div>
+  </section>
+
+  <!-- SETTINGS -->
+  <section class="view" id="v-set" hidden>
+    <div class="card">
+      <h2>رأس البلاغ والتوقيعات</h2>
+      <div class="bar" style="margin-top:10px">
+        <label class="f">المحافظة<input id="cGov"></label>
+        <label class="f">الإدارة<input id="cAdm"></label>
+        <label class="f">الوحدة<input id="cUnit"></label>
+        <label class="f">العام الدراسي<input id="cYear" placeholder="2026 / 2027"></label>
+        <label class="f">فني المعمل<input id="cTech"></label>
+        <label class="f">مدير الوحدة<input id="cMgr"></label>
+        <label class="f">بداية العام (للبلاغ النهائي)<input type="date" id="cStart"></label>
+      </div>
+      <div class="row" style="margin-top:12px"><button class="btn" id="cSave">حفظ</button></div>
+    </div>
+    <div class="card">
+      <h2>الفريق</h2>
+      <p class="cap">داخل باسم: <b id="whoami">—</b></p>
+      <p class="cap">كود الوحدة: <b id="codeShow" dir="ltr" style="letter-spacing:2px">••••••••</b> <button class="btn ghost" id="codeEye" style="padding:4px 10px;font-size:13px">إظهار</button></p>
+      <div class="row">
+        <button class="btn" id="teamLink">نسخ رابط الفريق</button>
+        <button class="btn ghost" id="backup">تنزيل نسخة احتياطية</button>
+      </div>
+      <p class="hint" style="margin:8px 0 0">ابعت رابط الفريق لزمايلك على واتساب. أول ما حد يفتحه ويكتب اسمه، بيدخل على طول من غير إيميل ولا باسورد.</p>
+      <details style="margin-top:10px"><summary>تغيير كود الوحدة</summary>
+        <p class="hint" style="margin:6px 0">اللي داخلين بالفعل هيفضلوا داخلين. الكود الجديد بيتطلب من الأجهزة الجديدة بس.</p>
+        <div class="row"><input id="codeNew" inputmode="numeric" placeholder="كود جديد (8 أرقام)" style="direction:ltr;text-align:center;flex:1"><button class="btn ghost" id="codeSave">حفظ الكود</button></div>
+      </details>
+    </div>
+    <div class="card">
+      <h2>جهات الإرسال على واتساب</h2>
+      <p class="cap">ضيف رقم الشخص اللي بتبعتله البلاغ (زي مشرف الإدارة). للجروب سيب الرقم فاضي، وواتساب هيفتح قائمة تختار منها الجروب.</p>
+      <div class="slist" id="waList"></div>
+      <div class="row" style="margin-top:10px">
+        <input id="waName" placeholder="الاسم (مثلاً: مشرف المعامل)" style="flex:2;min-width:160px">
+        <input id="waNum" placeholder="الرقم 01xxxxxxxxx" inputmode="tel" style="flex:1;min-width:140px;direction:ltr;text-align:right">
+        <button class="btn" id="waAdd">إضافة</button>
+      </div>
+    </div>
+  </section>
+</main>
+
+<div class="savebar" id="saveBar"><div class="in">
+  <div class="st" id="saveSt">لا توجد تغييرات</div>
+  <button class="btn dz" id="eClear">مسح اليوم</button>
+  <button class="btn" id="eSave" disabled>حفظ</button>
+</div></div>
+<div class="toast" id="toast" hidden></div>
+<div id="stage" aria-hidden="true"></div>
+
+<script>
+/* ---------- schema (matches the ministry form) ---------- */
+const G=[['p1','الصف الأول الابتدائي','أولى ابتدائي'],['p4','الصف الرابع الابتدائي','رابعة ابتدائي'],['m1','الصف الأول الإعدادي','أولى إعدادي'],['s1','الصف الأول الثانوي','أولى ثانوي']];
+const SX=[['m','ذكر'],['f','أنثى']];
+const AG=[['a','أقل من أو = 12 سنة'],['b','أكبر من 12 سنة']];
+const AGs={a:'≤12',b:'>12'};
+const STH=[['asc','إسكارس'],['anc','إنكلستوما'],['tri','تريكوكفالس'],['str','يرقة إسترنجوليدس']];
+const INT=[['oxy','الإكسيورس'],['het','هتروفس'],['hna','هيمنولبس نانا'],['tae','تينيا'],['amT','أميبا ترفوزيت'],['amC','أميبا أكياس'],['giT','جيارديا ترفوزيت'],['giC','جيارديا أكياس']];
+/* field kinds: n = no split, s = by sex, sa = by sex and age */
+const SECTIONS=[
+  {t:'الفحص',cap:'المستهدف والمفحوصين بالعدد الكلي، والعينات حسب النوع.',f:[['tg','عدد الطلبة المستهدف','n'],['ex','عدد الطلبة المفحوصين','n'],['ur','عينات بول مفحوصة','s'],['st','عينات براز مفحوصة','s']]},
+  {t:'البلهارسيا والفاشيولا',cap:'الإيجابي حسب النوع، والمعالج بالعدد الكلي.',f:[['bu','إيجابي بلهارسيا بولية','s'],['bi','إيجابي بلهارسيا معوية','s'],['bt','عدد المعالج بلهارسيا','n'],['fp','إيجابي فاشيولا','s'],['ft','عدد المعالج فاشيولا','n']]},
+  {t:'الطفيليات المعوية',cap:'حسب النوع والسن المختارين فوق.',f:[...INT.map(x=>[x[0],x[1],'sa']),['intT','جملة المعالجين','n']]},
+  {t:'الطفيليات المنقولة بالتربة',cap:'حسب النوع والسن المختارين فوق.',f:[...STH.map(x=>[x[0],x[1],'sa']),['sthT','جملة المعالجين','n']]}
+];
+
+/* ---------- state ---------- */
+let cfg={schools:[],wa:[],gov:'',adm:'',unit:'',year:'',tech:'',mgr:'',start:''};
+let entries={};
+let db=null;
+let draft=null, dirty=false, curGrade='p1', curSex='m', curAge='a';
+let view='entry', repType='day', draftKey={date:'',sid:''}, confirmPending=false, clearArm=0, busy=false;
+const $=id=>document.getElementById(id);
+const pad=n=>String(n).padStart(2,'0');
+const iso=d=>d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());
+const fmt=s=>{if(!s)return '..../..../....';const [y,m,d]=s.split('-');return d+'/'+m+'/'+y};
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const today=iso(new Date());
+function toast(t,ms){const e=$('toast');e.textContent=t;e.hidden=false;clearTimeout(toast.t);toast.t=setTimeout(()=>e.hidden=true,ms||2600)}
+function weekRange(s){const d=new Date(s+'T12:00');const back=(d.getDay()+1)%7;const a=new Date(d);a.setDate(d.getDate()-back);const b=new Date(a);b.setDate(a.getDate()+5);return [iso(a),iso(b)]}
+function defStart(){const d=new Date();const y=d.getMonth()>=8?d.getFullYear():d.getFullYear()-1;return y+'-09-01'}
+const fkey=(k,kind,s,a)=>kind==='n'?k:kind==='s'?k+'_'+s:k+'_'+s+'_'+a;
+
+/* ---------- storage ---------- */
+function lsGet(k){try{return JSON.parse(localStorage.getItem(k))}catch(e){return null}}
+function lsSet(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}
+async function saveCfg(){ if(db){await db.doc('config/main').set(cfg)} else {lsSet('sr_cfg',cfg)} }
+async function saveEntry(id,body){ if(db){ if(body) await db.doc('entries/'+id).set(body); else await db.doc('entries/'+id).delete(); } else { if(body) entries[id]=body; else delete entries[id]; lsSet('sr_entries',entries); onData(); } }
+function showBanner(t){const b=$('banner');b.textContent=t;b.hidden=!t}
+
+const FIREBASE_CONFIG = {apiKey:"AIzaSyBT5CTH4x6cDWBoelrjmaWku-y_Rl8zOkI",authDomain:"bilharzia-unit.firebaseapp.com",projectId:"bilharzia-unit",storageBucket:"bilharzia-unit.firebasestorage.app",messagingSenderId:"1086581555126",appId:"1:1086581555126:web:ada034f3430671de694b17"};
+let fsdb=null, me=null, joinCode='';
+const curEmail=()=>me&&me.name||'';
+function gate(which){ $('gate').hidden=!which; $('gWait').hidden=which!=='wait'; $('gJoin').hidden=which!=='join'; }
+function readJoinHash(){ const m=location.hash.match(/^#join=([^&]+)$/); if(m){ history.replaceState(null,'',location.pathname); try{ return decodeURIComponent(m[1]) }catch(e){ return m[1] } } return ''; }
+const pendingCode=readJoinHash();
+function enter(){ lsSet('sr_member',{uid:firebase.auth().currentUser.uid,name:me.name}); gate(null); $('whoami').textContent=me.name; startSync(fsdb); loadCode(); }
+async function loadCode(){ try{ const d=await fsdb.doc('private/join').get(); joinCode=d.exists?String(d.data().code||''):''; }catch(e){} }
+function niceErr(e){ return e&&e.code==='permission-denied'?'الكود غلط. اتأكد منه من مسؤول الوحدة.':(e&&e.code==='unavailable'?'مفيش نت. اتصل بالنت وحاول تاني.':(e&&e.message)||'حصل خطأ'); }
+async function doJoin(){
+  const name=$('jName').value.trim(), code=$('jCode').value.trim(); $('jErr').textContent='';
+  if(!name){$('jErr').textContent='اكتب اسمك';return} if(!code){$('jErr').textContent='اكتب كود الوحدة';return}
+  $('jGo').disabled=true;
+  try{ const uid=firebase.auth().currentUser.uid; await fsdb.doc('members/'+uid).set({name,code,at:Date.now()}); me={name}; enter(); }
+  catch(e){ $('jErr').textContent=niceErr(e); } finally{ $('jGo').disabled=false; }
+}
+async function doCreate(){
+  const name=$('jName').value.trim(), code=$('jNew').value.trim(); $('jErr').textContent='';
+  if(!name){$('jErr').textContent='اكتب اسمك الأول';return} if(!/^\S{6,}$/.test(code)){$('jErr').textContent='الكود لازم يكون 6 حروف أو أرقام على الأقل، ويفضّل 8';return}
+  try{ const uid=firebase.auth().currentUser.uid; const b=fsdb.batch(); b.set(fsdb.doc('private/join'),{code}); b.set(fsdb.doc('members/'+uid),{name,code,at:Date.now()}); await b.commit(); me={name}; joinCode=code; enter(); toast('اتعمل كود الوحدة. ابعت رابط الفريق لزمايلك من «بيانات الوحدة».',4000); }
+  catch(e){ $('jErr').textContent=e&&e.code==='permission-denied'?'فيه كود اتعمل للوحدة قبل كده. اطلبه من المسؤول واكتبه فوق.':niceErr(e); }
+}
+function copyTeamLink(){
+  if(!joinCode){ toast('لسه بيحمّل الكود، جرّب كمان ثانية'); loadCode(); return; }
+  const link=location.origin+location.pathname+'#join='+encodeURIComponent(joinCode);
+  const done=()=>toast('اتنسخ رابط الفريق. ابعته لزمايلك على واتساب.',3500);
+  if(navigator.clipboard) navigator.clipboard.writeText(link).then(done,()=>prompt('انسخ الرابط ده:',link)); else prompt('انسخ الرابط ده:',link);
+}
+async function saveCode(){
+  const code=$('codeNew').value.trim(); if(!/^\S{6,}$/.test(code)){toast('الكود لازم يكون 6 على الأقل');return}
+  try{ await fsdb.doc('private/join').set({code}); joinCode=code; $('codeNew').value=''; $('codeShow').textContent='••••••••'; toast('اتغير كود الوحدة'); }catch(e){ toast(niceErr(e)); }
+}
+function doBackup(){
+  const blob=new Blob([JSON.stringify({exportedAt:new Date().toISOString(),cfg,entries},null,1)],{type:'application/json'});
+  saveBlob(blob,'نسخة احتياطية بلاغات '+today+'.json');
+}
+(function boot(){
+  initUI(); onCfg(); onData();
+  if('serviceWorker' in navigator){ navigator.serviceWorker.register('sw.js').catch(()=>{}); }
+  if(!window.firebase){ showBanner('مكتبات Firebase ما اتحملتش. اتأكد من النت وافتح الصفحة تاني.'); return; }
+  firebase.initializeApp(FIREBASE_CONFIG);
+  fsdb=firebase.firestore();
+  fsdb.enablePersistence({synchronizeTabs:true}).catch(()=>{});
+  const saved=lsGet('sr_member');
+  gate(saved?null:'wait');
+  if(pendingCode) $('jCode').value=pendingCode;
+  firebase.auth().onAuthStateChanged(async u=>{
+    if(!u){ try{ await firebase.auth().signInAnonymously(); }catch(e){ gate('join'); $('jErr').textContent='ما قدرتش أفتح: '+niceErr(e); } return; }
+    if(saved&&saved.uid===u.uid){ me={name:saved.name}; enter(); return; }
+    try{ const m=await fsdb.doc('members/'+u.uid).get(); if(m.exists){ me={name:m.data().name}; enter(); return; } }catch(e){}
+    gate('join'); if(pendingCode&&$('jName').value.trim()) doJoin();
+  });
+})();
+let started=false;
+function startSync(fs){
+  if(started) return; started=true; db=fs;
+  let got=false; const timer=setTimeout(()=>{ if(!got) showBanner('مفيش اتصال بالنت دلوقتي. اللي هتسجله هيتحفظ على الجهاز ويترفع أول ما النت يرجع.') },10000);
+  const onErr=err=>{ clearTimeout(timer); if(err&&err.code==='permission-denied'){ try{localStorage.removeItem('sr_member')}catch(e){} showBanner('الجهاز ده مش متسجّل في فريق الوحدة. افتح رابط الفريق تاني أو اكتب كود الوحدة.'); } else showBanner('تعذّر تحميل البيانات: '+(err&&err.message||'')); };
+  db.doc('config/main').onSnapshot({includeMetadataChanges:false},s=>{ got=true; if(s.exists){cfg=Object.assign({schools:[],wa:[]},s.data());} if(!s.metadata.fromCache){clearTimeout(timer);showBanner('')} onCfg(); }, onErr);
+  db.collection('entries').onSnapshot(s=>{ got=true; const m={}; s.docs.forEach(d=>m[d.id]=d.data()); entries=m; if(!s.metadata.fromCache){clearTimeout(timer);showBanner('')} onData(); }, onErr);
+}
+
+/* ---------- UI wiring ---------- */
+function initUI(){
+  document.querySelectorAll('nav.tabs button').forEach(b=>b.onclick=()=>setView(b.dataset.v));
+  $('goSch').onclick=()=>setView('sch');
+  $('eDate').value=today;
+  $('eDate').onchange=()=>{ if(!confirmLeave()){ $('eDate').value=draftKey.date; return;} loadDraft(); renderDay(); };
+  $('eSchool').onchange=()=>{ if(!confirmLeave()){ $('eSchool').value=draftKey.sid; return;} loadDraft(); };
+  $('eSex').querySelectorAll('button').forEach(b=>b.onclick=()=>{curSex=b.dataset.s;syncToggles();renderForms()});
+  $('eAge').querySelectorAll('button').forEach(b=>b.onclick=()=>{curAge=b.dataset.a;syncToggles();renderForms()});
+  $('eSave').onclick=doSave; $('eClear').onclick=doClear;
+  $('rFrom').value=today; $('rTo').value=today; $('rNum').value=1;
+  $('rType').querySelectorAll('button').forEach(btn=>btn.onclick=()=>{ $('rType').querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed',x===btn)); setRepType(btn.dataset.t); });
+  ['rFrom','rTo','rNum','rSchool'].forEach(id=>$(id).addEventListener('input',()=>{ if(repType==='day') $('rTo').value=$('rFrom').value; renderPreview(); }));
+  $('pdfBtn').onclick=()=>doDownload(); $('shareBtn').onclick=()=>doShare(); $('waSum').onchange=updateWaLink;
+  $('teamLink').onclick=copyTeamLink; $('backup').onclick=doBackup;
+  $('jGo').onclick=doJoin; $('jCreate').onclick=doCreate; $('codeSave').onclick=saveCode;
+  $('jCode').addEventListener('keydown',e=>{if(e.key==='Enter')doJoin()});
+  $('codeEye').onclick=()=>{ const sh=$('codeEye').textContent==='إظهار'; $('codeShow').textContent=sh?(joinCode||'…'):'••••••••'; $('codeEye').textContent=sh?'إخفاء':'إظهار'; };
+  $('waTo').onchange=()=>{ const w=cfg.wa[+$('waTo').value]; $('waNumIn').value=w&&w.num?('0'+w.num.replace(/^20/,'')):''; updateWaLink(); };
+  $('waNumIn').addEventListener('input',()=>{ $('waTo').value=''; lsSet('sr_lastwa',$('waNumIn').value); updateWaLink(); });
+  try{ const lw=lsGet('sr_lastwa'); if(lw) $('waNumIn').value=lw; }catch(e){}
+  $('waSave').onclick=async()=>{ const raw=$('waNumIn').value.trim(); const num=normNum(raw); if(!num){toast('اكتب رقم صحيح زي 01012345678');return} if(cfg.wa.some(w=>w.num===num)){toast('الرقم محفوظ قبل كده');return} cfg.wa.push({name:'0'+num.replace(/^20/,''),num}); try{await saveCfg();toast('اتحفظ الرقم. تقدر تغيّر اسمه من «بيانات الوحدة».',3500);onCfg()}catch(e){toast('ما اتحفظش')} };
+  $('sAdd').onclick=()=>addSchools();
+  $('sNew').addEventListener('keydown',e=>{if(e.key==='Enter')addSchools()});
+  $('sNew').addEventListener('paste',e=>{const t=e.clipboardData?e.clipboardData.getData('text'):'';if(t&&t.includes('\n')){e.preventDefault();addSchools(t)}});
+  $('cSave').onclick=async()=>{ cfg.gov=$('cGov').value.trim();cfg.adm=$('cAdm').value.trim();cfg.unit=$('cUnit').value.trim();cfg.year=$('cYear').value.trim();cfg.tech=$('cTech').value.trim();cfg.mgr=$('cMgr').value.trim();cfg.start=$('cStart').value; try{await saveCfg();toast('اتحفظت بيانات الوحدة');onCfg()}catch(e){toast('ما اتحفظش: '+(e.message||e.code))} };
+  $('waAdd').onclick=async()=>{ const n=$('waName').value.trim(); if(!n){toast('اكتب الاسم');return} const num=normNum($('waNum').value); if($('waNum').value.trim()&&!num){toast('الرقم مش مظبوط. اكتبه زي 01012345678');return} (cfg.wa=cfg.wa||[]).push({name:n,num}); $('waName').value='';$('waNum').value=''; try{await saveCfg();toast('اتضافت');onCfg()}catch(e){toast('ما اتحفظش')} };
+  window.addEventListener('beforeunload',e=>{if(dirty){e.preventDefault();e.returnValue=''}});
+}
+function normNum(v){ let d=String(v||'').replace(/[^\d٠-٩]/g,'').replace(/[٠-٩]/g,c=>'٠١٢٣٤٥٦٧٨٩'.indexOf(c)); if(!d) return ''; if(d.startsWith('00')) d=d.slice(2); if(d.startsWith('01')&&d.length===11) d='2'+d; return d.length>=10?d:''; }
+function setView(v){ view=v; document.querySelectorAll('nav.tabs button').forEach(b=>b.setAttribute('aria-selected',b.dataset.v===v)); ['entry','rep','sch','set'].forEach(k=>$('v-'+k).hidden=k!==v); syncChrome(); if(v==='rep')renderPreview(); if(v==='set')fillSettings(); window.scrollTo(0,0); }
+function syncChrome(){ const has=cfg.schools.length>0; $('saveBar').hidden=view!=='entry'||!has; $('ctx').hidden=view!=='entry'||!has; }
+function confirmLeave(){ if(!dirty) return true; if(confirmPending){confirmPending=false;dirty=false;return true} confirmPending=true; toast('فيه أرقام مش محفوظة. اضغط «حفظ» الأول، أو غيّر تاني لو عايز تسيبها.',4000); setTimeout(()=>confirmPending=false,4000); return false; }
+
+function onCfg(){
+  cfg.wa=cfg.wa||[];
+  const sel=$('eSchool'), cur=sel.value;
+  sel.innerHTML=cfg.schools.map(s=>`<option value="${esc(s.id)}">${esc(s.name)}</option>`).join('');
+  if(cfg.schools.some(s=>s.id===cur)) sel.value=cur;
+  const rs=$('rSchool'), rc=rs.value;
+  rs.innerHTML=`<option value="__each">كل مدرسة في صفحة لوحدها</option><option value="__all">كل المدارس في بلاغ مجمّع</option>`+cfg.schools.map(s=>`<option value="${esc(s.id)}">${esc(s.name)}</option>`).join('');
+  if([...rs.options].some(o=>o.value===rc)) rs.value=rc;
+  const ws=$('waTo'), wc=ws.value;
+  ws.innerHTML=`<option value="">— اختار —</option>`+cfg.wa.map((w,i)=>`<option value="${i}">${esc(w.name)}${w.num?' — 0'+w.num.replace(/^20/,''):' (اختيار من واتساب)'}</option>`).join('');
+  if([...ws.options].some(o=>o.value===wc)) ws.value=wc;
+  const has=cfg.schools.length>0;
+  $('eNoSchools').hidden=has; $('eForms').hidden=!has; $('dayCard').hidden=!has;
+  syncChrome();
+  $('unitLine').textContent=[cfg.unit&&('وحدة '+cfg.unit),cfg.adm&&('إدارة '+cfg.adm),cfg.gov&&('محافظة '+cfg.gov)].filter(Boolean).join(' — ')||'البلهارسيا والطفيليات المعوية';
+  renderSchools(); renderWaList(); if(view==='set')fillSettings();
+  if(!draft || !dirty) loadDraft(); renderDay(); if(view==='rep')renderPreview();
+}
+function onData(){ if(!dirty) loadDraft(); renderDay(); if(view==='rep')renderPreview(); }
+
+/* ---------- entry ---------- */
+function loadDraft(){
+  const date=$('eDate').value, sid=$('eSchool').value; draftKey={date,sid};
+  const e=entries[date+'_'+sid];
+  draft={}; G.forEach(([g])=>draft[g]=Object.assign({}, e&&e.g&&e.g[g]||{}));
+  dirty=false; $('eSave').disabled=true; renderGradeChips(); renderForms();
+  $('saveSt').textContent = !sid?'' : e ? 'محفوظ' : 'لسه مفيش بيانات لليوم ده';
+}
+function setDirty(){ dirty=true; $('eSave').disabled=false; $('saveSt').textContent='أرقام جديدة مش محفوظة'; }
+function gradeHas(g){const o=draft&&draft[g];return o&&Object.values(o).some(v=>+v>0)}
+function syncToggles(){
+  $('eSex').querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.s===curSex));
+  $('eAge').querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.a===curAge));
+}
+function renderGradeChips(){
+  if(!draft) return;
+  $('eGrades').innerHTML=G.map(([k,,s])=>`<button data-g="${k}" aria-pressed="${k===curGrade}">${gradeHas(k)?'<span class="dot"></span>':''}${s}</button>`).join('');
+  $('eGrades').querySelectorAll('button').forEach(b=>b.onclick=()=>{curGrade=b.dataset.g; curAge=curGrade==='s1'?'b':'a'; syncToggles(); renderGradeChips(); renderForms()});
+}
+function otherLine(o,k,kind){
+  if(kind==='n') return '';
+  if(kind==='s'){const m=o[k+'_m']||0,f=o[k+'_f']||0; return `ذكر ${m} · أنثى ${f} · المجموع ${m+f}`;}
+  let t=0; const parts=SX.map(([s,sn])=>AG.map(([a])=>{const v=o[k+'_'+s+'_'+a]||0;t+=v;return `${sn} ${AGs[a]}: ${v}`}).join(' · ')).join(' · ');
+  return t?`${parts} — المجموع ${t}`:'';
+}
+function renderForms(){
+  if(!draft||!cfg.schools.length){$('eForms').innerHTML='';return}
+  const o=draft[curGrade]; const gName=G.find(g=>g[0]===curGrade)[1];
+  const sexN=SX.find(s=>s[0]===curSex)[1];
+  const tag=kind=>kind==='n'?'<span class="tag n">العدد الكلي</span>':kind==='s'?`<span class="tag ${curSex}">${sexN}</span>`:`<span class="tag ${curSex}">${sexN} · ${AGs[curAge]}</span>`;
+  $('eForms').innerHTML=SECTIONS.map((sec,si)=>`<div class="card"><h2>${sec.t}</h2><p class="cap">${gName} — ${sec.cap}</p><div class="ctrs">${sec.f.map(([k,n,kind])=>{const key=fkey(k,kind,curSex,curAge);const v=o[key]||0;return `<div class="ctr"><div class="lb"><b>${n}${tag(kind)}</b><span class="oth" id="oth_${k}">${otherLine(o,k,kind)}</span></div><div class="stp"><button class="minus" data-key="${key}" aria-label="إنقاص ${n}">−</button><input type="number" min="0" inputmode="numeric" id="in_${key}" data-key="${key}" data-k="${k}" data-kind="${kind}" value="${v||''}" placeholder="0" aria-label="${n}"><button class="plus" data-key="${key}" aria-label="زيادة ${n}">+</button></div></div>`}).join('')}</div><div class="warn" id="w${si}"></div></div>`).join('');
+  $('eForms').querySelectorAll('.stp').forEach(stp=>{
+    const inp=stp.querySelector('input');
+    const apply=v=>{v=Math.max(0,Math.floor(+v||0)); const k=inp.dataset.key; if(v) o[k]=v; else delete o[k]; inp.value=v||''; $('oth_'+inp.dataset.k).textContent=otherLine(o,inp.dataset.k,inp.dataset.kind); setDirty(); validate(); const had=!!$('eGrades').querySelector(`[data-g="${curGrade}"] .dot`); if(had!==gradeHas(curGrade)) renderGradeChips();};
+    stp.querySelector('.minus').onclick=()=>apply((+inp.value||0)-1);
+    stp.querySelector('.plus').onclick=()=>apply((+inp.value||0)+1);
+    inp.addEventListener('input',()=>apply(inp.value));
+  });
+  validate();
+}
+function validate(){
+  const o=draft[curGrade]; const w=[[],[],[],[]];
+  const mark=(k,bad)=>{const el=$('in_'+k); if(el) el.classList.toggle('bad',bad)};
+  const tg=o.tg||0, ex=o.ex||0;
+  mark('ex',tg>0&&ex>tg); if(tg>0&&ex>tg) w[0].push('المفحوصين أكتر من المستهدف');
+  const ur=(o.ur_m||0)+(o.ur_f||0), st=(o.st_m||0)+(o.st_f||0);
+  if(ex>0&&ur>ex) w[0].push(`عينات البول (${ur}) أكتر من المفحوصين (${ex})`);
+  if(ex>0&&st>ex) w[0].push(`عينات البراز (${st}) أكتر من المفحوصين (${ex})`);
+  const bp=(o.bu_m||0)+(o.bu_f||0)+(o.bi_m||0)+(o.bi_f||0); mark('bt',(o.bt||0)>bp); if((o.bt||0)>bp) w[1].push('المعالج بلهارسيا أكتر من الإيجابي');
+  const fp=(o.fp_m||0)+(o.fp_f||0); mark('ft',(o.ft||0)>fp); if((o.ft||0)>fp) w[1].push('المعالج فاشيولا أكتر من الإيجابي');
+  if(ur&&(o.bu_m||0)+(o.bu_f||0)>ur) w[1].push('إيجابي البولية أكتر من عينات البول');
+  w.forEach((x,i)=>{const el=$('w'+i); if(el) el.textContent=x.join(' · ')});
+}
+async function doSave(){
+  const {date,sid}=draftKey; if(!date||!sid) return;
+  const g={}; let any=false; G.forEach(([k])=>{ if(Object.keys(draft[k]).length){g[k]=draft[k];any=true} });
+  $('eSave').disabled=true; $('saveSt').textContent='جاري الحفظ…';
+  try{ await saveEntry(date+'_'+sid, any?{date,sid,g,at:Date.now(),by:curEmail()}:null); dirty=false; $('saveSt').textContent='محفوظ'; toast('اتحفظ'); renderDay(); }
+  catch(e){ $('eSave').disabled=false; $('saveSt').textContent='ما اتحفظش: '+(e.message||e.code||'خطأ'); }
+}
+async function doClear(){
+  const {date,sid}=draftKey; if(!entries[date+'_'+sid]&&!dirty){toast('مفيش بيانات لليوم ده');return}
+  if(Date.now()-clearArm>4000){clearArm=Date.now();toast('اضغط «مسح اليوم» تاني للتأكيد');return}
+  clearArm=0; try{ await saveEntry(date+'_'+sid,null); dirty=false; loadDraft(); toast('اتمسحت بيانات اليوم ده للمدرسة دي'); }catch(e){toast('ما اتمسحش: '+(e.message||e.code))}
+}
+function renderDay(){
+  const d=$('eDate').value; $('dayLbl').textContent=fmt(d);
+  $('dayChips').innerHTML=cfg.schools.map(s=>{const on=!!entries[d+'_'+s.id];return `<span class="chip ${on?'on':''}">${on?'✓ ':''}${esc(s.name)}</span>`}).join('');
+}
+
+/* ---------- schools & contacts ---------- */
+function renderSchools(){
+  $('schCount').textContent=cfg.schools.length?`(${cfg.schools.length})`:'';
+  $('sList').innerHTML=cfg.schools.length?cfg.schools.map((s,i)=>`<div class="sitem"><span class="num">${i+1}</span><input id="sn_${esc(s.id)}" value="${esc(s.name)}" data-i="${i}" aria-label="اسم المدرسة"><button class="ib" data-up="${i}" aria-label="لأعلى" ${i?'':'disabled'}>▲</button><button class="ib x" data-del="${i}" aria-label="حذف">✕</button></div>`).join(''):'<p class="hint" style="margin:0">لسه مفيش مدارس. اكتب اسم أول مدرسة تحت.</p>';
+  $('sList').querySelectorAll('input').forEach(inp=>inp.addEventListener('change',async()=>{const n=inp.value.trim();if(!n)return;cfg.schools[+inp.dataset.i].name=n;await saveCfg();toast('اتغير الاسم');onCfg()}));
+  $('sList').querySelectorAll('[data-up]').forEach(b=>b.onclick=async()=>{const i=+b.dataset.up;const a=cfg.schools;[a[i-1],a[i]]=[a[i],a[i-1]];await saveCfg();onCfg()});
+  $('sList').querySelectorAll('[data-del]').forEach(b=>b.onclick=async()=>{
+    const i=+b.dataset.del, s=cfg.schools[i]; const used=Object.values(entries).some(e=>e.sid===s.id);
+    if(b.dataset.arm!=='1'){b.dataset.arm='1';b.textContent='؟';toast(used?`«${s.name}» ليها نتايج متسجلة. اضغط ✕ تاني لو متأكد.`:`اضغط تاني لحذف «${s.name}»`,4000);setTimeout(()=>{b.dataset.arm='';b.textContent='✕'},4000);return}
+    cfg.schools.splice(i,1); await saveCfg(); onCfg(); });
+}
+function renderWaList(){
+  $('waList').innerHTML=cfg.wa.length?cfg.wa.map((w,i)=>`<div class="sitem"><span class="num">${i+1}</span><span style="flex:1">${esc(w.name)} <span class="hint" style="direction:ltr;display:inline-block">${w.num?'+'+w.num:'(اختيار من واتساب)'}</span></span><button class="ib x" data-wdel="${i}" aria-label="حذف">✕</button></div>`).join(''):'<p class="hint" style="margin:0">مفيش جهات لسه.</p>';
+  $('waList').querySelectorAll('[data-wdel]').forEach(b=>b.onclick=async()=>{cfg.wa.splice(+b.dataset.wdel,1);await saveCfg();onCfg()});
+}
+async function addSchools(text){
+  const raw=typeof text==='string'?text:$('sNew').value;
+  const names=raw.split(/\n/).map(s=>s.replace(/^\s*[\d٠-٩]+\s*[\-\.\)ـ]\s*/,'').trim()).filter(Boolean);
+  if(!names.length) return;
+  names.forEach((n,i)=>cfg.schools.push({id:'s'+Date.now().toString(36)+i,name:n}));
+  $('sNew').value=''; try{await saveCfg(); toast(names.length>1?`اتضافت ${names.length} مدارس`:'اتضافت المدرسة'); onCfg();}catch(e){toast('ما اتحفظش: '+(e.message||e.code))}
+}
+function fillSettings(){ $('cGov').value=cfg.gov||'';$('cAdm').value=cfg.adm||'';$('cUnit').value=cfg.unit||'';$('cYear').value=cfg.year||'';$('cTech').value=cfg.tech||'';$('cMgr').value=cfg.mgr||'';$('cStart').value=cfg.start||defStart(); }
+
+/* ---------- aggregation ---------- */
+function agg(from,to,sids){
+  const out={all:{}}; G.forEach(([g])=>out[g]={});
+  const set=sids?new Set(sids):new Set(cfg.schools.map(s=>s.id));
+  Object.values(entries).forEach(e=>{
+    if(e.date<from||e.date>to||!set.has(e.sid)) return;
+    G.forEach(([g])=>{const o=e.g&&e.g[g]; if(!o) return; for(const k in o){const v=+o[k]||0; out[g][k]=(out[g][k]||0)+v; out.all[k]=(out.all[k]||0)+v;}});
+  });
+  return out;
+}
+const val=(o,k)=>o[k]||0;
+const tot=(o,k)=>Object.keys(o).reduce((t,x)=>(x===k||x.startsWith(k+'_'))?t+o[x]:t,0);
+function vSA(o,k,s,a){
+  if(k==='_sth') return STH.reduce((t,[x])=>t+val(o,x+'_'+s+'_'+a),0);
+  if(k==='_int') return INT.reduce((t,[x])=>t+val(o,x+'_'+s+'_'+a),0);
+  return val(o,k+'_'+s+'_'+a);
+}
+const td=v=>`<td${v?'':' class="z"'}>${v}</td>`;
+
+/* ---------- report sheets (ministry layout) ---------- */
+function head(kind,from,to,num,school){
+  const yr=esc(cfg.year)||'..............................';
+  let t1;
+  if(kind==='week') t1=`البلاغ الأسبوعي رقم ( ${esc(num)||'......'} ) من تاريخ ${fmt(from)} إلى ${fmt(to)}`;
+  else if(kind==='day') t1=`البلاغ اليومي بتاريخ ${fmt(from)}`;
+  else t1=`البلاغ النهائي لفحص تلاميذ المدارس عام ${yr}`;
+  const t2=kind==='final'?`عن الفترة من ${fmt(from)} إلى ${fmt(to)}`:`لفحص تلاميذ المدارس عام ${yr}`;
+  return `<div class="hd"><div class="ar">وزارة الصحة والسكان<br>قطاع الطب الوقائي والصحة العامة<br>الإدارة المركزية للأمراض المدارية ونواقل الأمراض<br>الإدارة العامة للأمراض المدارية</div>
+  <div class="en">Ministry of Health &amp; Population<br>Preventive Medicine and Public Health Sector<br>Tropical Diseases &amp; Vectors control department<br>General Department of Tropical Diseases</div></div>
+  <div class="meta"><span>المحافظة: <b>${esc(cfg.gov)}</b></span><span>الإدارة: <b>${esc(cfg.adm)}</b></span><span>الوحدة: <b>${esc(cfg.unit)}</b></span></div>
+  <div class="ttl"><u>${t1}</u><br><u>${t2}</u></div>${school?`<div class="who">المدرسة: <b>${esc(school)}</b></div>`:''}`;
+}
+const sig=()=>`<div class="grow"></div><div class="sig"><div>فني المعمل<i>${esc(cfg.tech)||'..................................'}</i></div><div>مدير الوحدة<i>${esc(cfg.mgr)||'..................................'}</i></div></div>`;
+const foot=(i,n)=>`<div class="foot"><span>تاريخ الإصدار: ${fmt(today)}</span><span>صفحة ${i} من ${n}</span></div>`;
+const groups=()=>[...G.map(g=>[g[0],g[1]]),['all','الإجمالي']];
+const ageHdr=n=>Array.from({length:n},()=>AG.map(a=>`<th class="v"><span>${a[1]}</span></th>`).join('')).join('');
+
+function tExam(A){
+  const gs=groups();
+  return `<table><tr><th class="tt" colspan="${gs.length*6}">بيان فحص تلاميذ المدارس للبلهارسيا والطفيليات المعوية</th></tr>
+  <tr>${gs.map(g=>`<th class="gp" colspan="6">${g[1]}</th>`).join('')}</tr>
+  <tr>${gs.map(()=>`<th rowspan="3" class="v"><span>المستهدف</span></th><th rowspan="3" class="v"><span>عدد الطلبة المفحوصة</span></th><th colspan="4">عدد العينات المفحوصة</th>`).join('')}</tr>
+  <tr>${gs.map(()=>`<th colspan="2">بول</th><th colspan="2">براز</th>`).join('')}</tr>
+  <tr>${gs.map(()=>`<th class="sx">ذكر</th><th class="sx">أنثى</th><th class="sx">ذكر</th><th class="sx">أنثى</th>`).join('')}</tr>
+  <tr>${gs.map(([g])=>td(val(A[g],'tg'))+td(val(A[g],'ex'))+td(val(A[g],'ur_m'))+td(val(A[g],'ur_f'))+td(val(A[g],'st_m'))+td(val(A[g],'st_f'))).join('')}</tr></table>`;
+}
+function tBil(A){
+  const gs=groups();
+  return `<table><tr><th class="tt" colspan="${gs.length*8}">بيان إيجابي البلهارسيا والفاشيولا والمعالجين</th></tr>
+  <tr>${gs.map(g=>`<th class="gp" colspan="8">${g[1]}</th>`).join('')}</tr>
+  <tr>${gs.map(()=>`<th colspan="4">إيجابي بلهارسيا</th><th rowspan="3" class="v"><span>عدد المعالج بلهارسيا</span></th><th colspan="2" rowspan="2">إيجابي فاشيولا</th><th rowspan="3" class="v"><span>عدد المعالج فاشيولا</span></th>`).join('')}</tr>
+  <tr>${gs.map(()=>`<th colspan="2">بولية</th><th colspan="2">معوية</th>`).join('')}</tr>
+  <tr>${gs.map(()=>`<th class="sx">ذكر</th><th class="sx">أنثى</th><th class="sx">ذكر</th><th class="sx">أنثى</th><th class="sx">ذكر</th><th class="sx">أنثى</th>`).join('')}</tr>
+  <tr>${gs.map(([g])=>td(val(A[g],'bu_m'))+td(val(A[g],'bu_f'))+td(val(A[g],'bi_m'))+td(val(A[g],'bi_f'))+td(val(A[g],'bt'))+td(val(A[g],'fp_m'))+td(val(A[g],'fp_f'))+td(val(A[g],'ft'))).join('')}</tr></table>`;
+}
+function tInt(A){
+  const o=A.all;
+  const items=[{n:'الإكسيورس',k:'oxy'},{n:'هتروفس',k:'het'},{n:'هيمنولبس نانا',k:'hna'},{n:'تينيا',k:'tae'},{n:'أميبا',subs:[['amT','ترفوزيت'],['amC','أكياس']]},{n:'جيارديا لامبليا',subs:[['giT','ترفوزيت'],['giC','أكياس']]},{n:'الإجمالي',k:'_int'}];
+  const leaves=[];items.forEach(it=>it.subs?it.subs.forEach(s=>leaves.push(s[0])):leaves.push(it.k));
+  const cols=leaves.length*4;
+  return `<table><colgroup>${'<col>'.repeat(cols)}<col style="width:9%"></colgroup>
+  <tr><th class="tt" colspan="${cols+1}">بيان إيجابي الطفيليات المعوية والمعالجين لتلاميذ المدارس</th></tr>
+  <tr>${items.map(it=>it.subs?`<th class="gp" colspan="8">${it.n}</th>`:`<th class="gp" colspan="4" rowspan="2">${it.n}</th>`).join('')}<th rowspan="4">جملة المعالجين</th></tr>
+  <tr>${items.filter(it=>it.subs).map(it=>it.subs.map(s=>`<th colspan="4">${s[1]}</th>`).join('')).join('')}</tr>
+  <tr>${leaves.map(()=>SX.map(s=>`<th colspan="2" class="sx">${s[1]}</th>`).join('')).join('')}</tr>
+  <tr>${ageHdr(leaves.length*2)}</tr>
+  <tr>${leaves.map(k=>SX.map(([s])=>AG.map(([a])=>td(vSA(o,k,s,a))).join('')).join('')).join('')}${td(val(o,'intT'))}</tr></table>`;
+}
+function tSth(A){
+  const o=A.all; const cols=[...STH,['_sth','الإجمالي']];
+  return `<table><colgroup>${'<col>'.repeat(cols.length*4)}<col style="width:14%"></colgroup>
+  <tr><th class="tt" colspan="${cols.length*4+1}">بيان إيجابي الطفيليات المنقولة بالتربة والمعالجين لتلاميذ المدارس</th></tr>
+  <tr>${cols.map(c=>`<th class="gp" colspan="4">${c[1]}</th>`).join('')}<th rowspan="3">جملة المعالجين</th></tr>
+  <tr>${cols.map(()=>SX.map(s=>`<th colspan="2" class="sx">${s[1]}</th>`).join('')).join('')}</tr>
+  <tr>${ageHdr(cols.length*2)}</tr>
+  <tr>${cols.map(([k])=>SX.map(([s])=>AG.map(([a])=>td(vSA(o,k,s,a))).join('')).join('')).join('')}${td(val(o,'sthT'))}</tr></table>`;
+}
+function periodSheet(kind,from,to,num,sids,school){
+  const A=agg(from,to,sids);
+  return `<div class="sheet">${head(kind,from,to,num,school)}${tExam(A)}${tBil(A)}${tInt(A)}${tSth(A)}${sig()}<!--FOOT--></div>`;
+}
+const FIN=[['fp','الفاشيولا'],['asc','اسكارس'],['anc','انكلستوما'],['tri','تريكو كفالس'],['str','يرقة استرنجوليدس'],['oxy','الاكسيورس'],['het','هتروفس'],['hna','هـ. نانا'],['tae','تينيا']];
+function finRow(o){
+  const t=k=>tot(o,k);
+  const par=[...FIN.map(([k])=>t(k)),t('amT'),t('amC'),t('giT'),t('giC')];
+  return [t('tg'),t('ex'),t('ur'),t('st'),t('bu'),t('bi'),...par,par.reduce((a,b)=>a+b,0),t('ft')+t('sthT')+t('intT')];
+}
+function finalSheets(from,to){
+  const rows=cfg.schools.map(s=>({n:s.name,v:finRow(agg(from,to,[s.id]).all)}));
+  const total=finRow(agg(from,to,null).all);
+  const per=16, pages=[]; for(let i=0;i<Math.max(rows.length,1);i+=per) pages.push(rows.slice(i,i+per));
+  return pages.map((pr,pi)=>{
+    const last=pi===pages.length-1; const blanks=Math.max(0,(last?14:per)-pr.length);
+    return `<div class="sheet">${head('final',from,to)}
+  <table class="fin"><colgroup><col style="width:13%"></colgroup>
+  <tr><th rowspan="3" class="v"><span>اسم المدرسة</span></th><th rowspan="3" class="v"><span>عدد الطلبة المستهدف</span></th><th rowspan="3" class="v"><span>عدد الطلبة المفحوصين</span></th><th colspan="2">عدد العينات المفحوصة</th><th colspan="2">إيجابي بلهارسيا</th><th colspan="15">نتائج فحص الطفيليات المعوية</th></tr>
+  <tr><th rowspan="2">بول</th><th rowspan="2">براز</th><th rowspan="2">بولية</th><th rowspan="2">معوية</th>${FIN.map(c=>`<th rowspan="2" class="v"><span>${c[1]}</span></th>`).join('')}<th colspan="2">أميبا</th><th colspan="2">جيارديا لامبليا</th><th rowspan="2">الجملة</th><th rowspan="2" class="v"><span>المعالجين</span></th></tr>
+  <tr><th>ترفوزيت</th><th>أكياس</th><th>ترفوزيت</th><th>أكياس</th></tr>
+  ${pr.map(r=>`<tr><td class="nm">${esc(r.n)}</td>${r.v.map(td).join('')}</tr>`).join('')}
+  ${('<tr>'+'<td></td>'.repeat(22)+'</tr>').repeat(blanks)}
+  ${last?`<tr class="sum"><td class="nm">الإجمالي</td>${total.map(td).join('')}</tr>`:''}
+  </table>${sig()}<!--FOOT--></div>`;}).join('');
+}
+
+/* ---------- reports view ---------- */
+function setRepType(t){
+  repType=t;
+  $('lNum').hidden=t!=='week'; $('lTo').hidden=t==='day'; $('lSch').hidden=t==='final';
+  $('lFromT').textContent=t==='day'?'اليوم':'من تاريخ';
+  if(t==='day'){ $('rTo').value=$('rFrom').value; }
+  if(t==='week'){ const [a,b]=weekRange($('rFrom').value||today); $('rFrom').value=a; $('rTo').value=b; }
+  if(t==='final'){ $('rFrom').value=cfg.start||defStart(); $('rTo').value=today; }
+  $('pdfStatus').hidden=true;
+  renderPreview();
+}
+function range(){ const from=$('rFrom').value||today; return [from, repType==='day'?from:($('rTo').value||from)]; }
+function buildSheets(){
+  const [from,to]=range();
+  let html;
+  if(repType==='final') html=finalSheets(from,to);
+  else { const sel=$('rSchool').value, num=$('rNum').value;
+    if(sel==='__all'||!cfg.schools.length) html=periodSheet(repType,from,to,num,null,'');
+    else if(sel==='__each') html=cfg.schools.map(s=>periodSheet(repType,from,to,num,[s.id],s.name)).join('');
+    else { const s=cfg.schools.find(x=>x.id===sel); html=periodSheet(repType,from,to,num,[sel],s?s.name:''); } }
+  const parts=html.split('<!--FOOT-->'); const n=parts.length-1;
+  return parts.map((p,i)=>i<n?p+foot(i+1,n):p).join('');
+}
+function renderPreview(){ $('preview').innerHTML=buildSheets(); updateWaLink(); prewarm(); }
+function fileName(){
+  const [from,to]=range(); const nm={day:'بلاغ يومي',week:'بلاغ أسبوعي',final:'بلاغ نهائي'}[repType];
+  const sel=$('rSchool').value; const s=repType!=='final'&&cfg.schools.find(x=>x.id===sel);
+  return `${nm}${repType==='week'?' رقم '+($('rNum').value||''):''} ${s?s.name+' ':''}${repType==='day'?fmt(from):fmt(from)+' - '+fmt(to)}`.replace(/[\/\\:*?"<>|]/g,'-').replace(/\s+/g,' ').trim()+'.pdf';
+}
+function summaryText(){
+  const [from,to]=range(); const sel=$('rSchool').value;
+  const sids=repType==='final'||sel==='__all'||sel==='__each'?null:[sel];
+  const o=agg(from,to,sids).all; const t=k=>tot(o,k);
+  const sth=STH.reduce((a,[k])=>a+t(k),0), it=INT.reduce((a,[k])=>a+t(k),0);
+  const nm={day:'البلاغ اليومي',week:'البلاغ الأسبوعي رقم '+($('rNum').value||''),final:'البلاغ النهائي'}[repType];
+  const s=sids&&cfg.schools.find(x=>x.id===sel);
+  return [`${nm} لفحص تلاميذ المدارس`,[cfg.unit&&`وحدة ${cfg.unit}`,cfg.adm&&`إدارة ${cfg.adm}`].filter(Boolean).join(' — '),s?`مدرسة: ${s.name}`:'',repType==='day'?`بتاريخ ${fmt(from)}`:`من ${fmt(from)} إلى ${fmt(to)}`,'',
+    `المستهدف: ${t('tg')} — المفحوص: ${t('ex')}`,`عينات بول: ${t('ur')} — عينات براز: ${t('st')}`,`إيجابي بلهارسيا: بولية ${t('bu')} / معوية ${t('bi')} — فاشيولا ${t('fp')}`,`طفيليات معوية: ${it} — منقولة بالتربة: ${sth}`,'','الملف المرفق: '+fileName()].filter((x,i,a)=>x!==''||a[i-1]!=='').join('\n');
+}
+function updateWaLink(){
+  const num=normNum($('waNumIn').value);
+  const msg=$('waSum').checked?summaryText():`مرفق ${fileName().replace(/\.pdf$/,'')}`;
+  $('waLink').href=`https://wa.me/${num}?text=${encodeURIComponent(msg)}`;
+}
+
+/* ---------- PDF ---------- */
+function b64ToBytes(b64){const bin=atob(b64);const u=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)u[i]=bin.charCodeAt(i);return u}
+function buildPdf(pages){ // pages: [{jpg:Uint8Array,w,h}] -> Blob (A4 landscape)
+  const PW=841.89, PH=595.28, M=12, enc=new TextEncoder();
+  const parts=[]; let len=0; const offs=[];
+  const push=x=>{const b=typeof x==='string'?enc.encode(x):x;parts.push(b);len+=b.length};
+  const obj=(n,body)=>{offs[n]=len;push(`${n} 0 obj\n`);body();push('\nendobj\n')};
+  push('%PDF-1.4\n'); push(new Uint8Array([0x25,0xE2,0xE3,0xCF,0xD3,0x0A]));
+  const n=pages.length; const kids=pages.map((_,i)=>`${3+i*3} 0 R`).join(' ');
+  obj(1,()=>push('<< /Type /Catalog /Pages 2 0 R >>'));
+  obj(2,()=>push(`<< /Type /Pages /Kids [${kids}] /Count ${n} >>`));
+  pages.forEach((p,i)=>{
+    const po=3+i*3, co=po+1, io=po+2;
+    const s=Math.min((PW-2*M)/p.w,(PH-2*M)/p.h); const w=p.w*s, h=p.h*s, x=(PW-w)/2, y=PH-M-h;
+    const cs=`q ${w.toFixed(2)} 0 0 ${h.toFixed(2)} ${x.toFixed(2)} ${y.toFixed(2)} cm /Im0 Do Q`;
+    obj(po,()=>push(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${PW} ${PH}] /Resources << /XObject << /Im0 ${io} 0 R >> >> /Contents ${co} 0 R >>`));
+    obj(co,()=>{push(`<< /Length ${cs.length} >>\nstream\n`);push(cs);push('\nendstream')});
+    obj(io,()=>{push(`<< /Type /XObject /Subtype /Image /Width ${p.pw} /Height ${p.ph} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${p.jpg.length} >>\nstream\n`);push(p.jpg);push('\nendstream')});
+  });
+  const total=2+n*3; const xref=len;
+  let x=`xref\n0 ${total+1}\n0000000000 65535 f \n`; for(let i=1;i<=total;i++) x+=String(offs[i]).padStart(10,'0')+' 00000 n \n';
+  push(x); push(`trailer\n<< /Size ${total+1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF`);
+  return new Blob(parts,{type:'application/pdf'});
+}
+/* Paint a laid-out sheet onto a canvas by measuring the real DOM: no external library, no foreignObject, works in every webview */
+function paintSheet(el){
+  const r0=el.getBoundingClientRect(); const W=Math.ceil(r0.width), H=Math.ceil(Math.max(r0.height,el.scrollHeight));
+  const S=2, cv=document.createElement('canvas'); cv.width=W*S; cv.height=H*S;
+  const c=cv.getContext('2d'); c.scale(S,S); c.fillStyle='#fff'; c.fillRect(0,0,W,H);
+  const R=r=>({x:r.left-r0.left,y:r.top-r0.top,w:r.width,h:r.height});
+  const cells=[...el.querySelectorAll('th,td')];
+  cells.forEach(cell=>{const bg=getComputedStyle(cell).backgroundColor; if(bg&&!/rgba\(0, 0, 0, 0\)|transparent|rgb\(255, 255, 255\)/.test(bg)){const b=R(cell.getBoundingClientRect());c.fillStyle=bg;c.fillRect(b.x,b.y,b.w,b.h)}});
+  c.strokeStyle='#000'; c.lineWidth=1;
+  cells.forEach(cell=>{const b=R(cell.getBoundingClientRect()); c.strokeRect(Math.round(b.x)+.5,Math.round(b.y)+.5,Math.round(b.w),Math.round(b.h))});
+  el.querySelectorAll('.meta b').forEach(e=>{const b=R(e.getBoundingClientRect());c.save();c.setLineDash([1.5,2]);c.beginPath();c.moveTo(b.x,b.y+b.h-.5);c.lineTo(b.x+b.w,b.y+b.h-.5);c.stroke();c.restore()});
+  el.querySelectorAll('.foot').forEach(e=>{const b=R(e.getBoundingClientRect());c.save();c.strokeStyle='#bbb';c.beginPath();c.moveTo(b.x,b.y+.5);c.lineTo(b.x+b.w,b.y+.5);c.stroke();c.restore()});
+  const tw=document.createTreeWalker(el,NodeFilter.SHOW_TEXT); let n;
+  while((n=tw.nextNode())){
+    const txt=n.nodeValue; if(!txt.trim()) continue;
+    const p=n.parentElement, cs=getComputedStyle(p);
+    c.font=`${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`; c.fillStyle=cs.color; c.textBaseline='middle'; c.textAlign='center';
+    try{ c.direction=cs.direction||'rtl' }catch(e){}
+    const fs=parseFloat(cs.fontSize)||10;
+    if(/^vertical/.test(cs.writingMode||'')){
+      const b=R(p.getBoundingClientRect()); const words=txt.trim().split(/\s+/);
+      let lines=[words.join(' ')];
+      if(c.measureText(lines[0]).width>b.h+2&&words.length>1){const m=Math.ceil(words.length/2);lines=[words.slice(0,m).join(' '),words.slice(m).join(' ')]}
+      c.save(); c.translate(b.x+b.w/2,b.y+b.h/2); c.rotate(-Math.PI/2);
+      const lh=fs*1.15; lines.forEach((t,i)=>c.fillText(t,0,(i-(lines.length-1)/2)*lh)); c.restore(); continue;
+    }
+    const re=/\S+/g, words=[]; let m;
+    while((m=re.exec(txt))){ const rg=document.createRange(); rg.setStart(n,m.index); rg.setEnd(n,m.index+m[0].length); const rr=rg.getClientRects()[0]; if(rr&&rr.width) words.push({t:m[0],r:R(rr)}); }
+    const lines=[]; words.forEach(w=>{const cy=w.r.y+w.r.h/2; let L=lines.find(l=>Math.abs(l.cy-cy)<fs*0.6); if(!L){L={cy,ws:[],x1:1e9,x2:-1e9,y1:1e9,y2:-1e9};lines.push(L)} L.ws.push(w.t); L.x1=Math.min(L.x1,w.r.x);L.x2=Math.max(L.x2,w.r.x+w.r.w);L.y1=Math.min(L.y1,w.r.y);L.y2=Math.max(L.y2,w.r.y+w.r.h)});
+    const und=!!p.closest('u');
+    lines.forEach(L=>{ c.fillText(L.ws.join(' '),(L.x1+L.x2)/2,(L.y1+L.y2)/2); if(und){c.save();c.strokeStyle=cs.color;c.lineWidth=.8;c.beginPath();c.moveTo(L.x1,L.y2+1);c.lineTo(L.x2,L.y2+1);c.stroke();c.restore()} });
+  }
+  return {cv,W,H};
+}
+async function renderPdfBlob(onProgress){
+  const stage=$('stage'); stage.innerHTML=buildSheets();
+  try{ if(document.fonts&&document.fonts.ready) await document.fonts.ready; }catch(e){}
+  const sheets=[...stage.querySelectorAll('.sheet')]; const pages=[];
+  try{
+    for(let i=0;i<sheets.length;i++){
+      onProgress&&onProgress(i+1,sheets.length);
+      await new Promise(r=>setTimeout(r,0));
+      const {cv,W,H}=paintSheet(sheets[i]);
+      const jpg=b64ToBytes(cv.toDataURL('image/jpeg',0.9).split(',')[1]);
+      pages.push({jpg,w:W,h:H,pw:cv.width,ph:cv.height});
+    }
+  } finally { stage.innerHTML=''; }
+  return buildPdf(pages);
+}
+function saveBlob(blob,name){ const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download=name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),60000); }
+let pdfCache={key:null,p:null}, warmT=0;
+function getPdf(onProgress){
+  const key=buildSheets()+'|'+fileName();
+  if(pdfCache.key===key&&pdfCache.p) return pdfCache.p;
+  const name=fileName();
+  const p=renderPdfBlob(onProgress).then(blob=>({blob,name}));
+  pdfCache={key,p}; p.catch(()=>{ if(pdfCache.p===p) pdfCache={key:null,p:null} });
+  return p;
+}
+function prewarm(){ clearTimeout(warmT); warmT=setTimeout(()=>{ if(view==='rep'&&!busy) getPdf().catch(()=>{}) },700); }
+function setSt(t,err){ const st=$('pdfStatus'); st.hidden=false; st.className='status'+(err?' err':''); st.textContent=t; }
+async function doDownload(){
+  if(busy) return; busy=true; $('pdfBtn').disabled=true;
+  try{ const {blob,name}=await getPdf((i,n)=>setSt(`بيجهز ملف PDF… صفحة ${i} من ${n}`)); saveBlob(blob,name); setSt(`✓ اتنزل «${name}» (${Math.round(blob.size/1024)} ك.ب). تلاقيه في «الملفات ← التنزيلات».`); }
+  catch(e){ setSt('ما اتعملش الملف: '+(e&&e.message||'خطأ'),true); }
+  finally{ busy=false; $('pdfBtn').disabled=false; }
+}
+async function doShare(){
+  if(busy) return; busy=true; $('shareBtn').disabled=true;
+  try{
+    const {blob,name}=await getPdf((i,n)=>setSt(`بيجهز ملف PDF… صفحة ${i} من ${n}`));
+    const file=new File([blob],name,{type:'application/pdf'});
+    if(navigator.canShare&&navigator.canShare({files:[file]})){
+      const data={files:[file],title:name}; if($('waSum').checked) data.text=summaryText();
+      try{ await navigator.share(data); setSt('✓ اتبعت الملف.'); }
+      catch(e){ if(e&&e.name==='AbortError') setSt('اتلغت المشاركة.'); else if(e&&e.name==='NotAllowedError'){ setSt('الملف جاهز. اضغط «إرسال الـ PDF على واتساب» تاني.'); } else throw e; }
+    } else { saveBlob(blob,name); setSt('المتصفح ده مش بيدعم مشاركة الملفات، فنزّلت الملف. افتحه من التنزيلات ← مشاركة ← واتساب. (على أندرويد افتح الموقع من Chrome)',true); }
+  }catch(e){ setSt('ما اتبعتش: '+(e&&e.message||'خطأ'),true); }
+  finally{ busy=false; $('shareBtn').disabled=false; }
+}
+syncToggles(); setRepType('day');
+</script>
+</body></html>
